@@ -20,6 +20,7 @@ use embassy_usb_driver::{
 };
 
 use crate::fmt::Bytes;
+use crate::otg_v1::{Reg, R};
 
 pub mod otg_v1;
 
@@ -946,6 +947,11 @@ impl<'d> Bus<'d> {
                             w.set_sd0pid_sevnfrm(true);
                         }
                     });
+                    trace!(
+                        "Doepctl({}) set to {} in configure_endpoints",
+                        index,
+                        regs.doepctl(index).read()
+                    );
 
                     regs.doeptsiz(index).modify(|w| {
                         w.set_xfrsiz(ep.max_packet_size as _);
@@ -1107,6 +1113,11 @@ impl<'d> embassy_usb_driver::Bus for Bus<'d> {
                         w.set_stall(stalled);
                     });
                 });
+                trace!(
+                    "Doepctl({}) set to {} in endpoint_set_stalled",
+                    ep_addr.index(),
+                    regs.doepctl(ep_addr.index()).read()
+                );
 
                 st.ep_states[ep_addr.index()].out_waker.wake();
             }
@@ -1161,6 +1172,11 @@ impl<'d> embassy_usb_driver::Bus for Bus<'d> {
                     regs.doepctl(ep_addr.index()).modify(|w| {
                         w.set_usbaep(enabled);
                     });
+                    trace!(
+                        "Doepctl({}) set to {} in endpoint_set_enabled",
+                        ep_addr.index(),
+                        regs.doepctl(ep_addr.index()).read()
+                    );
 
                     // When re-enabling a non-EP0 OUT endpoint, prime it to receive a packet.
                     // Without this, the endpoint stays idle after reconnect and silently drops data.
@@ -1377,12 +1393,22 @@ impl<'d> embassy_usb_driver::EndpointOut for Endpoint<'d, Out> {
                                 r.set_soddfrm(true);
                             }
                         });
+                        trace!(
+                            "Doepctl({}) set to {} in EndpointOut::read",
+                            index,
+                            self.regs.doepctl(index).read()
+                        );
                     }
 
                     // Clear NAK to indicate we are ready to receive more data
                     self.regs.doepctl(index).modify(|w| {
                         w.set_cnak(true);
                     });
+                    trace!(
+                        "Doepctl({}) set to {} in EndpointOut::read",
+                        index,
+                        self.regs.doepctl(index).read()
+                    );
                 });
 
                 Poll::Ready(Ok(len as usize))
@@ -1541,6 +1567,11 @@ impl<'d> embassy_usb_driver::ControlPipe for ControlPipe<'d> {
                 self.regs
                     .doepctl(self.ep_out.info.addr.index())
                     .modify(|w| w.set_cnak(true));
+                trace!(
+                    "Doepctl({}) set to {} in ControlPipe::setup",
+                    self.ep_out.info.addr.index(),
+                    self.regs.doepctl(self.ep_out.info.addr.index()).read()
+                );
 
                 trace!("SETUP received: {:?}", Bytes(&data));
                 Poll::Ready(data)
@@ -1591,6 +1622,11 @@ impl<'d> embassy_usb_driver::ControlPipe for ControlPipe<'d> {
         self.regs.doepctl(self.ep_out.info.addr.index()).modify(|w| {
             w.set_stall(true);
         });
+        trace!(
+            "Doepctl({}) set to {} in reject",
+            self.ep_out.info.addr.index(),
+            self.regs.doepctl(self.ep_out.info.addr.index()).read()
+        );
     }
 
     async fn accept_set_address(&mut self, addr: u8) {

@@ -4,7 +4,9 @@
 
 #![allow(missing_docs)]
 
-use core::marker::PhantomData;
+use core::{any::TypeId, marker::PhantomData};
+
+use defmt::{Format, Formatter};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct RW;
@@ -89,6 +91,34 @@ impl<T: Copy, A: Read + Write> Reg<T, A> {
         let res = f(&mut val);
         self.write_value(val);
         res
+    }
+}
+
+impl<T: Read> From<Reg<regs::Doepctl, T>> for u32 {
+    fn from(value: Reg<regs::Doepctl, T>) -> Self {
+        value.read().0
+    }
+}
+
+impl Format for regs::Doepctl {
+    fn format(&self, fmt: defmt::Formatter) {
+        defmt::write!(
+            fmt,
+            "{{ mpsiz: {}; usbaep: {}; eonum_dpid: {}; naksts: {}; eptyp: {}; snpm: {}; stall: {}; cnak: {}; snak: {}; sd0pid_sevnfrm: {}; sd1pid_soddfrm: {}; epdis: {}; epena: {} }}",
+            self.mpsiz(),
+            self.usbaep(),
+            self.eonum_dpid(),
+            self.naksts(),
+            self.eptyp(),
+            self.snpm(),
+            self.stall(),
+            self.cnak(),
+            self.snak(),
+            self.sd0pid_sevnfrm(),
+            self.sd1pid_soddfrm(),
+            self.epdis(),
+            self.epena(),
+        )
     }
 }
 
@@ -5012,6 +5042,7 @@ pub mod vals {
         }
     }
     #[repr(u8)]
+    #[derive(defmt::Format)]
     #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
     #[allow(non_camel_case_types)]
     pub enum Eptyp {
