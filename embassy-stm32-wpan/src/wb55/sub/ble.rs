@@ -10,6 +10,9 @@ use crate::evt::{EvtBox, EvtPacket, EvtStub};
 use crate::sub::mm;
 use crate::tables::{BLE_CMD_BUFFER, BleTable, CS_BUFFER, EVT_QUEUE, HCI_ACL_DATA_BUFFER, TL_BLE_TABLE};
 use crate::unsafe_linked_list::LinkedListNode;
+use embassy_sync::blocking_mutex::raw::{CriticalSectionRawMutex, RawMutex};
+use embassy_sync::signal::Signal;
+static BLE_READ_DONE: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 
 /// A guard that, once constructed, may be used to send BLE commands to CPU2.
 ///
@@ -190,7 +193,8 @@ impl<'a> BleTx<'a> {
 impl<'a> BleRx<'a> {
     /// `HW_IPCC_BLE_EvtNot`
     pub async fn tl_read(&mut self) -> EvtBox<Self> {
-        self.ipcc_ble_event_channel
+        let res = self
+            .ipcc_ble_event_channel
             .receive(|| unsafe {
                 if let Some(node_ptr) =
                     critical_section::with(|cs| LinkedListNode::remove_head(cs, EVT_QUEUE.as_mut_ptr()))
@@ -200,7 +204,9 @@ impl<'a> BleRx<'a> {
                     None
                 }
             })
-            .await
+            .await;
+        BLE_READ_DONE.signal(true);
+        res
     }
 }
 
@@ -222,6 +228,7 @@ impl<'a> evt::MemoryManager for BleRx<'a> {
 /// Implement Controller for TX (Write only)
 impl<'a> hci::Controller for BleTx<'a> {
     async fn controller_write(&mut self, opcode: Opcode, payload: &[u8]) {
+        wait_for_true(&BLE_READ_DONE).await;
         self.tl_write(opcode.0, payload).await;
     }
 
@@ -240,5 +247,20 @@ impl<'a> hci::Controller for BleRx<'a> {
         let evt_box = self.tl_read().await;
         let evt_serial = evt_box.serial();
         buf[..evt_serial.len()].copy_from_slice(evt_serial);
+    }
+}
+
+// Generic function: Works with any Mutex type (CriticalSection, Thread, etc.)
+pub async fn wait_for_true<M: RawMutex>(signal: &Signal<M, bool>) {
+    loop {
+        // Wait for the next value
+        let val = signal.wait().await;
+
+        // If it is true, we are done. Return to the caller.
+        if val == true {
+            return;
+        }
+
+        // If val is false, the loop continues and waits again.
     }
 }
