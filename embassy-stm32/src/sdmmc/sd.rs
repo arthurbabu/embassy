@@ -756,8 +756,7 @@ impl<'a, 'b, A: Addressable> StorageDevice<'a, 'b, A> {
                     return false;
                 };
 
-                let card_status = CardStatus::<A::Ext>::from(status);
-                card_status.ready_for_data() && card_status.state() == CurrentState::Transfer
+                CardStatus::<A::Ext>::from(status).ready_for_data()
             },
             500_000,
         )
