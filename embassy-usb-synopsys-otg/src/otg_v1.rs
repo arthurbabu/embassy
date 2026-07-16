@@ -115,7 +115,7 @@ impl Format for regs::Doepctl {
             self.cnak(),
             self.snak(),
             self.sd0pid_sevnfrm(),
-            self.sd1pid_soddfrm(),
+            self.soddfrm(),
             self.epdis(),
             self.epena(),
         )
